@@ -37,9 +37,12 @@ We need to communicate which objective to complete via the stick.
 
 Maybe ask for the gesture twice to make sure it's received correctly.
 
-TODO: Refer to confusion matrix from IntelLab5 to see which gestures are most likely to be confused. Fill in this chart.
+These are the easiest gestures for my CNN to distinguish. But if we need more we can add them of course.
 
 | Gesture | Objective |
 | --- | --- |
-| # | Obj |
+| 0 | Obj |
+| 1 | Obj |
+| 5 | Obj |
+| 9 | Obj |
 
