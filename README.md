@@ -11,18 +11,24 @@
 1. Initialize ultrasonic sensors (1 is front, 2 is side)
 2. Arrive at vertical black tape section - this marks the start of the round wall-following obstacle.
 3. Turn right 90 degrees.
-4. Continuously read ultrasonic sensors until the black tape is detected again (after one loop).
+4. Continuously read ultrasonic sensors until the black (floor) tape is detected again (after one loop).
 
-## Odometry
-Needs to drive in a straight line, and turn at a specific angle. You'll probably need a PID loop based on encoder counts.
+## Odometry - Ella
+Needs to drive in a straight line, and turn at a specific angle. We'll probably need a PID loop based on encoder counts.
 
 Encoder conversion: 1440 counts per 1 shaft revolution. 
+
+Wheel diameter: 7cm
+
+Distance between wheels: 15cm
 
 ### Speed Capping
 Set min and max speeds when doing PID so that it doesn't do anything too crazy
 
 ### Straight Line Odometry
 Control both motors with PID loops to drive in a straight line. One motor may be stronger: this will be reflected in encoder values. Once you've reached the required distance you're good.
+
+Extension from odometry to a distance: integrate with IR sensors, and stop once you hit the black tape.
 
 ### Angular Odometry
 Need to keep track of distance between wheels (constant), wheel radius (constant), and encoder counts per revolution (1440). We'll need to derive some sort of equation for this. Also program in some acceptable "margin of error" - once we're close enough, just call it good. No need for oscillations.
