@@ -1,3 +1,5 @@
+% I think this is line following code?
+
 % Left motor is motor 2, right motor is motor 1
 % Sensor numbers go 1 - 6 from left to right
 % Initialize robot stuff

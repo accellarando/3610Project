@@ -52,3 +52,5 @@ These are the easiest gestures for my CNN to distinguish. But if we need more we
 | 5 | Obj |
 | 9 | Obj |
 
+
+# We are robot 20

@@ -130,6 +130,7 @@ function[] = go_straight_distance(distance)
 			currSpeedR = 0;
 		end
 
+		% Also takes care of clamping
 		set_speeds(currSpeedL, currSpeedR);
 
 		% wait for next sample
@@ -207,6 +208,7 @@ function [] = turn_degrees(angle)
 			currSpeedR = 0;
 		end
 
+		% Also takes care of clamping
 		set_speeds(currSpeedL, currSpeedR);
 
 		% wait for next sample
