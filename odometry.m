@@ -137,7 +137,82 @@ function[] = go_straight_distance(distance)
 	end
 end
 
-% PID control for turn to angle
+% PID control for turn to angle, [-180, 180]
 function [] = turn_degrees(angle)
-	%todo: trig	
+	if(abs(angle) > 180)
+		return;
+	end
+
+	% ????
+
+	% variables
+	turnRadius = WHEEL_DISTANCE / 2;
+	turnCircumference = 2 * pi * turnRadius;
+	turnDistance = (angle / 360) * turnCircumference;
+	tolerance = (ANGLE_ERROR / 360) * turnCircumference;
+	
+	% what the... FUCK is going on
+	% PID control loop
+	tic;
+	prevTime = 0;
+	prevErrL = 0;
+	prevErrR = 0;
+	integralL = 0;
+	derivativeL = 0;
+	integralR = 0;
+	derivativeR = 0;
+	currSpeedL = 0;
+	currSpeedR = 0;
+	goalLeft = turnDistance;
+	goalRight = -turnDistance;
+	distTravelledLeft = 0;
+	distTravelledRight = 0;
+	while ( !( (distTravelledLeft > goalLeft - tolerance) && 
+					(distTravelledLeft < goalLeft + tolerance) ) ||
+			!( (distTravelledRight > goalRight - tolerance) &&
+					(distTravelledRight < goalRight + tolerance)))
+
+		dt = toc - prevTime;
+		prevTime = toc;
+
+		% get encoder counts
+		[left, right] = get_encoders();
+		
+		% convert to distance
+		distTravelledLeft = counts_to_distance(left);
+		distTravelledRight = counts_to_distance(right);
+
+		% LEFT control
+		errL = distTravelledLeft - goalLeft;
+		if(abs(errL) > tolerance) 
+			integralL = integralL + errL * dt;
+			derivativeL = (errL - prevErrL) / dt;
+			pidL = (KpS * errL) + (KiS * integralL) + (KdS * derivativeL);
+			currSpeedL = currSpeedL + pidL;
+			prevErrL = errL;
+		else
+			currSpeedL = 0;
+		end
+
+
+		% RIGHT control
+		errR = distTravelledRight - goalRight;
+		if(abs(errR) > tolerance) 
+			integralR = integralR + errR * dt;
+			derivativeR = (errR - prevErrR) / dt;
+			pidR = (KpS * errR) + (KiS * integralR) + (KdS * derivativeR);
+			currSpeedR = currSpeedR + pidR;
+			prevErrR = errR;
+		else
+			currSpeedR = 0;
+		end
+
+		set_speeds(currSpeedL, currSpeedR);
+
+		% wait for next sample
+		pause(1/SAMPLE_FREQ);
+	end
 end
+
+
+
