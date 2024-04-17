@@ -45,8 +45,8 @@ fprintf('Front dist = %i   Left dist = %i\n', frontcm, leftcm);
 
 if frontcm <= 20
     % set motors to turn right 90 degrees
-    nb.setMotor(1,7)
-    nb.setMotor(2,-7)
+    nb.setMotor(1,-7)
+    nb.setMotor(2,7)
     leftcm = nb.ultrasonicRead2()/avgScaleFactor;
     %if left <= 10
     while(leftcm <= 13)
