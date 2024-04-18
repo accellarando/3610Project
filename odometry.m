@@ -12,24 +12,24 @@ classdef odometry
 %%%%%%%%%%
 
 %% Robot Parameters
-COUNTS_PER_REV	= 1440; % Encoder counts per revolution
+COUNTS_PER_REV	= 1440.0; % Encoder counts per revolution
 WHEEL_RADIUS	= 3.5;	% cm
-WHEEL_DISTANCE	= 15;	% cm
+WHEEL_DISTANCE	= 15.0;	% cm
 
-SAMPLE_FREQ		= 1000; % Hz; may need to adjust if you get aliasing
+SAMPLE_FREQ		= 500.0; % Hz; may need to adjust if you get aliasing
 
 % Abs motor speed limits: [0, 100]. May need tuning.
-MAX_SPEED		= 20; % if PID wants to go faster, bound it to this
-MIN_SPEED		= 5; % if PID wants to go slower, set to 0
+MAX_SPEED		= 12.0; % if PID wants to go faster, bound it to this
+MIN_SPEED		= 5.0; % if PID wants to go slower, set to 0
 
 % Margin of acceptable error for PID control distance
-DISTANCE_ERROR	= 0.5; % cm
-ANGLE_ERROR		= 5; % degrees
+DISTANCE_ERROR	= 0.75; % cm
+ANGLE_ERROR		= 7.5; % degrees
 
 % PID terms. Will definitely need tuning.
-KpS = 0.5;
-KiS = -0.5;
-KdS = 0.007;
+KpS = -0.06;
+KiS = -0.003;
+KdS = 0.0001; %0.007;
 
 	end
 	methods
@@ -40,13 +40,13 @@ KdS = 0.007;
       end
 		% Get encoder counts
 		function [left, right] = get_encoders(m)
-			left = m.nb.encoderRead(1).counts;
+			left = -1 * m.nb.encoderRead(1).counts; % left is counting backwards for some reason idk
 			right = m.nb.encoderRead(2).counts;
 		end
 
 		% Convert counts to distance
 		function [distance] = counts_to_distance(m,counts)
-			distance = (counts / m.COUNTS_PER_REV) * (2 * pi * m.WHEEL_RADIUS); % revs * circumference
+			distance = (counts / m.COUNTS_PER_REV) * (2.0 * pi * m.WHEEL_RADIUS); % revs * circumference
 		end
 
 
@@ -97,8 +97,8 @@ KdS = 0.007;
 				[left, right] = m.get_encoders();
 
 				% convert to distance
-				distTravelledLeft = distTravelledLeft + m.counts_to_distance(left);
-				distTravelledRight = distTravelledRight + m.counts_to_distance(right);
+				distTravelledLeft = distTravelledLeft + m.counts_to_distance(left)
+				distTravelledRight = distTravelledRight + m.counts_to_distance(right)
 
 				% LEFT control
 				errL = distTravelledLeft - distance;
@@ -126,6 +126,7 @@ KdS = 0.007;
 				end
 
 				% Also takes care of clamping
+                % currSpeedL, currSpeedR
 				m.set_speeds(currSpeedL, currSpeedR);
 
 				% wait for next sample
