@@ -27,7 +27,7 @@ DISTANCE_ERROR	= 0.5; % cm
 ANGLE_ERROR		= 5; % degrees
 
 % PID terms. Will definitely need tuning.
-KpS = -1;
+KpS = 0.5;
 KiS = -0.5;
 KdS = 0.007;
 
@@ -87,7 +87,7 @@ KdS = 0.007;
 			derivativeR = 0;
 			currSpeedL = 0;
 			currSpeedR = 0;
-			while ( ~( (distTravelledLeft > distance - m.DISTANCE_ERROR) && 				(distTravelledLeft < distance + m.DISTANCE_ERROR) ) ||				~( (distTravelledRight > distance - m.DISTANCE_ERROR) &&				(distTravelledRight < distance + m.DISTANCE_ERROR)))
+			while ( ~( (distTravelledLeft > distance - m.DISTANCE_ERROR) && (distTravelledLeft < distance + m.DISTANCE_ERROR) ) || ~( (distTravelledRight > distance - m.DISTANCE_ERROR) &&	(distTravelledRight < distance + m.DISTANCE_ERROR)))
 
 				% timekeeping? idfk
 				dt = toc - prevTime;
@@ -134,7 +134,7 @@ KdS = 0.007;
 		end
 
 		% PID control for turn to angle, [-180, 180]
-		function [] = turn_degrees(angle)
+		function [] = turn_degrees(m,angle)
 			if(abs(angle) > 180)
 				return;
 			end
