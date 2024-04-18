@@ -3,6 +3,8 @@
 clc
 clear all
 nb = nanobot('/dev/cu.usbmodem2101', 115200, 'serial');
+nb.setMotor(1,0);
+nb.setMotor(2,0);
 
 %% Initialize the ultrasonic sensor with TRIGPIN, ECHOPIN
 nb.initUltrasonic1('D2','D3')
@@ -40,23 +42,23 @@ frontcm = front / avgScaleFactor;
 fprintf("Last read: %0.1f cm\n", frontcm);
 
 
-front = nb.ultrasonicRead1();
+frontcm = nb.ultrasonicRead1() / avgScaleFactor;
 fprintf('Front dist = %i   Left dist = %i\n', frontcm, leftcm);
 
-if frontcm <= 20
+%pause(.1);
+if (frontcm < 20)
     % set motors to turn right 90 degrees
-    nb.setMotor(1,-7)
-    nb.setMotor(2,7)
-    leftcm = nb.ultrasonicRead2()/avgScaleFactor;
+    nb.setMotor(1,-10)
+    nb.setMotor(2,10)
+    leftcm = nb.ultrasonicRead2() / avgScaleFactor;
     %if left <= 10
-    while(leftcm <= 13)
+    while leftcm >= 13
         leftcm = nb.ultrasonicRead2() / avgScaleFactor;
-        if(leftcm < 10)
-            nb.setMotor(1, 12)
-            nb.setMotor(2, 8)
-            break;
-        end
+        pause(0.1);
     end
+
+    nb.setMotor(1, 10);
+    nb.setMotor(2, 10);
 end
 
 
@@ -69,14 +71,19 @@ while (true)
     % set motor 2 speed, this stays constant as it's closer to wall
     % set motor 1 speed, this will change as it will set the steering rate
 
-    if leftcm > 10
+    if leftcm > 8
         % set motor 1 speed to increase, this will bring it closer to the
         % wall
-        nb.setMotor(1, 10)
+        nb.setMotor(2, 8);
 
-    elseif leftcm < 5
+    else
         % set motor 1 speed to decrease, this will bring it farther to the
         % wall
-        nb.setMotor(1,8)
+        nb.setMotor(1,8);
     end      
+
+    pause(.01);
+    nb.setMotor(1, 11);
+    nb.setMotor(2, 10);
+
 end

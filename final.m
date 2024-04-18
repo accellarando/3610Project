@@ -1,133 +1,270 @@
-% I think this is line following code?
-
 % Left motor is motor 2, right motor is motor 1
 % Sensor numbers go 1 - 6 from left to right
 % Initialize robot stuff
 clc
 clear all
-nb = nanobot('COM4', 115200, 'wifi');
+nb = nanobot('COM3', 115200, 'serial');
 nb.initReflectance();
+nb.initUltrasonic1('D2','D3')
+nb.initUltrasonic2('D4','D5')
+front = nb.ultrasonicRead1();
+left = nb.ultrasonicRead2();
 
-% Globals
+% Globals for line following
 min_reflectance = [142,106,94,82,94,142];
-kp = 0.0001;
-kd = 0.0004;
-vals = 0;
+kp = 0.001;
+ki = 0;
+kd = 0.0007;
 prev_error = 0;
 prev_time = 0;
-run_time = 10;
+run_time = 40;
+integral = 0;
 derivative = 0;
-all_white_threshold = 200;
-max_error = 2500;
-max_speed = 12;
-min_error = -2500;
-motor1_current_speed = 0;
-motor2_current_speed = 0;
+max_speed = 10;
+motor_speed_offset = 0.1 * max_speed;
+all_white_threshold = 300;
+all_black_threshold = 1400;
+counter = 0;
+back_up_time = 3000; % In cycles
 
-% Loop
+% Globals for wall following
+dist = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]; % in cm
+val = [210, 296, 348, 486, 701, 842, 881, 993, 1086, 1199, 1310, 1397, 1616, 1631, 1784];
+arraySize = size(dist, 2); 
+scaleFactorList = zeros(1, arraySize);
+for i = 1:arraySize
+    % In [units/cm], according to array index
+    scaleFactorList(i) = 63;
+end
+avgScaleFactor = mean(scaleFactorList);
+distRange = [.4, 48];
+
+
+% Main line following loop
 tic
-% It can be helpful to initialize your motors to a fixed higher duty cycle
-% for a very brief moment, just to overcome the gearbox force of static
-% friction so that lower duty cycles don't stall out at the start.
-% (recommendation: 10, with mOffScale if needed)
-nb.setMotor(1, max_speed);
-nb.setMotor(2, max_speed);
+% To help overcome static friction
+nb.setMotor(1, motor_speed_offset);
+nb.setMotor(2, motor_speed_offset);
 pause(0.03);
 while (toc < run_time)
 
     % TIME STEP
-    dt = toc - prev_time;
-    prev_time = toc;
+    current_time = toc;
+    dt = current_time - prev_time;
+    prev_time = current_time;
 
-    % Read sensor valuesv
-    vals = nb.reflectanceRead();
-    calibratedVals = struct('one', 0, 'two', 0, 'three', 0, 'four', 0, 'five', 0, 'six', 0);
+    if counter ~= 0
+        %fprintf('backing up\n');
+        if counter == back_up_time
+            counter = 0;
+        else
+            counter = counter + 1;
+        end
+    else  
+
+    % Read sensor values
+    valss = nb.reflectanceRead();    
+    vals = [valss.one, valss.two, valss.three, valss.four, valss.five, valss.six];
+    calibratedVals = zeros(1,6);
     
     % Calibrate sensor readings, min is 0
-    if vals.one > min_reflectance(1)
-        calibratedVals.one = (vals.one - min_reflectance(1));
-    end
-    if vals.two > min_reflectance(2)
-        calibratedVals.two = (vals.two - min_reflectance(2));
-    end
-    if vals.three > min_reflectance(3)
-        calibratedVals.three = (vals.three - min_reflectance(3));
-    end
-    if vals.four > min_reflectance(4)
-        calibratedVals.four = (vals.four - min_reflectance(4));
-    end
-    if vals.five > min_reflectance(5)
-        calibratedVals.five = (vals.five - min_reflectance(5));
-    end
-    if vals.six > min_reflectance(6)
-        calibratedVals.six = (vals.six - min_reflectance(6));
-    end    
+    for i = 1:6
+        calibratedVals(i) = max(vals(i) - min_reflectance(i), 0);
+    end 
    
     % Calculate error, will range from -2500 to 2500
-    error = (0 * calibratedVals.one + 1000 * calibratedVals.two + 2000 * calibratedVals.three + 3000 * calibratedVals.four + 4000 * calibratedVals.five + 5000 * calibratedVals.six) / (calibratedVals.one + calibratedVals.two + calibratedVals.three + calibratedVals.four + calibratedVals.five + calibratedVals.six) - 2500;
+    weighted_sum = dot(calibratedVals, [0, 1000, 2000, 3000, 4000, 5000]);
+    error = weighted_sum / sum(calibratedVals) - 2500;
 
+    % Calculate position error
+    if sum(calibratedVals) <= all_white_threshold
+        % Check if we are close enough to a wall, maybe put in just main
+        % loop if robot gets too close before it detects all black
+        frontcm = nb.ultrasonicRead1() / avgScaleFactor;
+        if (frontcm < 30)
+            % set motors to turn right 90 degrees
+            nb.setMotor(1,-10)
+            nb.setMotor(2,10)
+            leftcm = nb.ultrasonicRead2() / avgScaleFactor;
+            % Teep turning until we get a reading from the left ultrasonic
+            while leftcm >= 13
+                leftcm = nb.ultrasonicRead2() / avgScaleFactor;
+                pause(0.1);
+            end
+            
+            % Start moving forward
+            nb.setMotor(1, 10);
+            nb.setMotor(2, 10);
 
-    % Detect if on white
-    if (calibratedVals.one + calibratedVals.two + calibratedVals.three + calibratedVals.four + calibratedVals.five + calibratedVals.six) <= all_white_threshold
-        fprintf('off line\n');
-        if prev_error < 0 
-            error = min_error;
-        else
-            error = max_error;
+            % Get out of line following while loop
+            counter = 0;
+            break;
         end
-        nb.setMotor(2, -9);
-        nb.setMotor(1, -9);
-        
-    else
-    
-    % Print values of sensors after adjusting
-    %fprintf('one: %.2f, two: %.2f, three: %.2f four: %.2f five: %.2f six: %.2f\n',calibratedVals.one, calibratedVals.two, calibratedVals.three, calibratedVals.four, calibratedVals.five, calibratedVals.six);
-    fprintf('error: %.2f\n', error);
-    
-    % Calculate D
-    derivative = (error - prev_error) / (run_time - prev_time);
 
-    % Set PID
+        % Only gets here if not in front of wall
+        if error <= 0 
+            nb.setMotor(2, -9);
+            
+        else
+            nb.setMotor(1, -9);
+        end
+
+        counter = 1;
+        continue;
+    end
+    
+    % Calculate PID stuff
+    integral = integral + error * dt;
+    derivative = (error - prev_error) / dt;
     control = kp * error + kd * derivative;
-    fprintf('control: %.2f\n', control);
 
-    motor1_current_speed = max_speed - control;
-    motor2_current_speed = max_speed + control;
-
-    if motor1_current_speed < 0
-        motor1_current_speed = 0;
-    end
-    if motor2_current_speed < 0
-        motor2_current_speed = 0;
-    end
-    if motor1_current_speed > max_speed
-        motor1_current_speed = max_speed;
-    end
-    if motor2_current_speed > max_speed
-        motor2_current_speed = max_speed;
-    end
+    motor1_current_speed = max(min(max_speed - control, max_speed), 0);
+    motor2_current_speed = max(min(max_speed + control, max_speed), 0);
 
     nb.setMotor(2, motor2_current_speed);
     nb.setMotor(1, motor1_current_speed);
 
     prev_error = error;
-
     end
+
 end
+
+% Stop motors breifly before following a wall
 nb.setMotor(1, 0);
 nb.setMotor(2, 0);
+
+% Start wall following
+while (true)
+
+    % Check for line
+    valss = nb.reflectanceRead();    
+    vals = [valss.one, valss.two, valss.three, valss.four, valss.five, valss.six];
+    calibratedVals = zeros(1,6);
+    for i = 1:6
+        calibratedVals(i) = max(vals(i) - min_reflectance(i), 0);
+    end 
+    if sum(calibratedVals) > all_black_threshold
+        break;
+    end
+
+
+    % Read left ultrasonic sensor
+    leftcm =  nb.ultrasonicRead2() / avgScaleFactor;
+    % set motor 2 speed, this stays constant as it's closer to wall
+    % set motor 1 speed, this will change as it will set the steering rate
+
+    if leftcm > 8
+        % set motor 1 speed to increase, this will bring it closer to the
+        % wall
+        nb.setMotor(2, 6);
+    else
+        % set motor 1 speed to decrease, this will bring it farther to the
+        % wall
+        nb.setMotor(1,6);
+    end      
+
+    pause(.05);
+    nb.setMotor(1, 11);
+    nb.setMotor(2, 8);
+
+end
+
+            % set motors to turn right 90 degrees
+            nb.setMotor(1,-10)
+            nb.setMotor(2,10)
+
+            pause(1);
+
+
+            % Main line following loop
+tic
+% To help overcome static friction
+nb.setMotor(1, motor_speed_offset);
+nb.setMotor(2, motor_speed_offset);
+pause(0.03);
+while (toc < run_time)
+
+    % TIME STEP
+    current_time = toc;
+    dt = current_time - prev_time;
+    prev_time = current_time;
+
+    if counter ~= 0
+        %fprintf('backing up\n');
+        if counter == back_up_time
+            counter = 0;
+        else
+            counter = counter + 1;
+        end
+    else  
+
+    % Read sensor values
+    valss = nb.reflectanceRead();    
+    vals = [valss.one, valss.two, valss.three, valss.four, valss.five, valss.six];
+    calibratedVals = zeros(1,6);
+    
+    % Calibrate sensor readings, min is 0
+    for i = 1:6
+        calibratedVals(i) = max(vals(i) - min_reflectance(i), 0);
+    end 
+   
+    % Calculate error, will range from -2500 to 2500
+    weighted_sum = dot(calibratedVals, [0, 1000, 2000, 3000, 4000, 5000]);
+    error = weighted_sum / sum(calibratedVals) - 2500;
+
+    % Calculate position error
+    if sum(calibratedVals) <= all_white_threshold
+        % Check if we are close enough to a wall, maybe put in just main
+        % loop if robot gets too close before it detects all black
+        frontcm = nb.ultrasonicRead1() / avgScaleFactor;
+        if (frontcm < 20)
+            % set motors to turn right 90 degrees
+            nb.setMotor(1,-10)
+            nb.setMotor(2,10)
+            leftcm = nb.ultrasonicRead2() / avgScaleFactor;
+            % Teep turning until we get a reading from the left ultrasonic
+            while leftcm >= 13
+                leftcm = nb.ultrasonicRead2() / avgScaleFactor;
+                pause(0.1);
+            end
+            
+            % Start moving forward
+            nb.setMotor(1, 10);
+            nb.setMotor(2, 10);
+
+            % Get out of line following while loop
+            counter = 0;
+            break;
+        end
+
+        % Only gets here if not in front of wall
+        if error <= 0 
+            nb.setMotor(2, -9);
+            
+        else
+            nb.setMotor(1, -9);
+        end
+
+        counter = 1;
+        continue;
+    end
+    
+    % Calculate PID stuff
+    integral = integral + error * dt;
+    derivative = (error - prev_error) / dt;
+    control = kp * error + kd * derivative;
+
+    motor1_current_speed = max(min(max_speed - control, max_speed), 0);
+    motor2_current_speed = max(min(max_speed + control, max_speed), 0);
+
+    nb.setMotor(2, motor2_current_speed);
+    nb.setMotor(1, motor1_current_speed);
+
+    prev_error = error;
+    end
+
+end
 
 %% Reset Motors
 nb.setMotor(1, 0);
 nb.setMotor(2, 0);
-
-%% Tune Motor offset
-% Motor offset factor:
-%mOffScale = 1;
-%duty = 10;
-%nb.setMotor(1, duty);
-%nb.setMotor(2, mOffScale * duty);
-%pause(2)
-%nb.setMotor(1, 0);
-%nb.setMotor(2, 0);
-
