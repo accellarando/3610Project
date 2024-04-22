@@ -1,15 +1,9 @@
 classdef odometry
 	properties
-		% properties
-		nb
-		%%%%%%%%%%
-		% ECE 3610
-		% Final Project
-		%
-		% Odometry Functions!
-		%%%%%%%%%%
+		%nanobot instance we're controlling
+		nb 
 
-		%% Robot Parameters
+		%Robot Parameters
 		COUNTS_PER_REV	= 1440.0; % Encoder counts per revolution
 		WHEEL_RADIUS	= 3.5;	% cm
 		WHEEL_DISTANCE	= 15.0;	% cm
@@ -18,92 +12,80 @@ classdef odometry
 
 		% Abs motor speed limits: [0, 100]. May need tuning.
 		MAX_SPEED		= 12.0; % if PID wants to go faster, bound it to this
-		MIN_SPEED		= 5.0; % if PID wants to go slower, set to 0
+		MIN_SPEED		= 8.0; % if PID wants to go slower, set to 0
 
 		% Margin of acceptable error for PID control distance
 		DISTANCE_ERROR	= 0.75; % cm
 		ANGLE_ERROR		= 7.5; % degrees
 
-		% PID terms. Will definitely need tuning.
+		% PID terms. garbage
 		KpS = -0.06;
-		KiS = 0; %-0.003;
+		KiS = 0;
 		KdS = 0;
-		%KiS = -0.003;
-		%KdS = 0.0001; %0.007;
 
 	end
 	methods
 		function obj = odometry(val)
 			obj.nb = val;
 			obj.nb.initReflectance();
-        end
+		end
 
 		function val = reflectanceRead(m)
 			val = m.nb.reflectanceRead();
 		end
 
 		% autonomous color task
-        function [] = do_color_task(m)
-            % Read color under sensor
+		function [] = do_color_task(m)
+			% Read color under sensor
 			[r,g,b] = m.get_color();
 
 			% Figure out if it's red, turn accordingly
-			isRed = r > b;
-			fprintf("Red: %d\n", isRed);
-			
-			m.set_speeds(-8,-10);
-			pause(0.25);
-			fprintf("off the pad\n");
+			isRed = r > b % print out isRed
+
+			% Go forward until off the pad
+			m.set_speeds(-11,-9); % jesus christ
+			pause(0.5);
+			m.set_speeds(0,0);
+			input("off the pad. continue?"); % ENTER to continue task
+
 			if(isRed)
-				m.turn_degrees(45);
+				%m.turn_degrees(-45);
+				m.set_speeds(-11,11);
+				pause(0.5);
+				m.set_speeds(0,0);
+				input("turned LEFT. continue?");
 			else
-				m.turn_degrees(-45);
+				m.set_speeds(11,-11);
+				pause(0.5);
+				m.set_speeds(0,0);
+				input("turned RIGHT. continue?");
 			end
-			fprintf("turned\n");
 
-			[r,g,b] = m.get_color()
+			% start going forward, then poll color sensor
+			m.set_speeds(-11,-9); 
 
-			if(isRed)
-				while(r < 160)
-					[r,g,b] = m.get_color()
+			while(1)
+				[r,g,b] = m.get_color();
+				if(isRed)
 					if(r > 160)
 						m.set_speeds(0,0);
 						break;
 					end
-					m.set_speeds(-8,-10);
-					pause(0.25);
-				end
-			else
-				while(b < 100)
-					[r,g,b] = m.get_color()
+				else
 					if(b > 100)
 						m.set_speeds(0,0);
 						break;
 					end
-					m.set_speeds(-8,-10);
-					pause(0.25);
 				end
+				pause(0.1);
 			end
 
-			input("Target reached?? Return?");
-			m.turn_degrees(179);
-			m.set_speeds(-8,-10);
-			pause(0.25);
-			while(1)
-				[r,g,b] = m.get_color()
-				if(r > 160 || b > 100)
-					m.set_speeds(0,0);
-					break;
-				end
-				m.set_speeds(-8,-10);
-				pause(0.25);
-			end
-			fprintf("done");
-        end
+			sprintf("reached target...\n");
+		end
 
 		% Get RGB under color sensor
 		function [r,g,b] = get_color(m)
-            m.nb.initColor();
+			m.nb.initColor();
 			value = m.nb.colorRead();
 			r = value.red;
 			g = value.green;
@@ -138,8 +120,8 @@ classdef odometry
 				right = m.MIN_SPEED * sign(right);
 			end
 
-			m.nb.setMotor(1, left);
-			m.nb.setMotor(2, right);
+			m.nb.setMotor(1, -1*left);
+			m.nb.setMotor(2, -1*right);
 		end
 
 		% PID control for straight shot distance
@@ -197,13 +179,8 @@ classdef odometry
 					currSpeedR = 0;
 				end
 
-				% Also takes care of clamping
 				% currSpeedL, currSpeedR
 				m.set_speeds(currSpeedL, currSpeedR);
-
-				if(currSpeedL < m.MIN_SPEED && currSpeedR < m.MIN_SPEED)
-					return;;
-				end
 
 				% wait for next sample
 				pause(1/m.SAMPLE_FREQ);
@@ -278,6 +255,11 @@ classdef odometry
 
 				% Also takes care of clamping
 				m.set_speeds(currSpeedL, currSpeedR);
+
+				if(abs(currSpeedL) < m.MIN_SPEED && abs(currSpeedR) < m.MIN_SPEED)
+					m.set_speeds(0,0);
+					return;
+				end
 
 				% wait for next sample
 				pause(1/m.SAMPLE_FREQ);
