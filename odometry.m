@@ -1,43 +1,115 @@
-
-
 classdef odometry
 	properties
 		% properties
 		nb
-        %%%%%%%%%%
-% ECE 3610
-% Final Project
-%
-% Odometry Functions!
-%%%%%%%%%%
+		%%%%%%%%%%
+		% ECE 3610
+		% Final Project
+		%
+		% Odometry Functions!
+		%%%%%%%%%%
 
-%% Robot Parameters
-COUNTS_PER_REV	= 1440.0; % Encoder counts per revolution
-WHEEL_RADIUS	= 3.5;	% cm
-WHEEL_DISTANCE	= 15.0;	% cm
+		%% Robot Parameters
+		COUNTS_PER_REV	= 1440.0; % Encoder counts per revolution
+		WHEEL_RADIUS	= 3.5;	% cm
+		WHEEL_DISTANCE	= 15.0;	% cm
 
-SAMPLE_FREQ		= 500.0; % Hz; may need to adjust if you get aliasing
+		SAMPLE_FREQ		= 500.0; % Hz; may need to adjust if you get aliasing
 
-% Abs motor speed limits: [0, 100]. May need tuning.
-MAX_SPEED		= 12.0; % if PID wants to go faster, bound it to this
-MIN_SPEED		= 5.0; % if PID wants to go slower, set to 0
+		% Abs motor speed limits: [0, 100]. May need tuning.
+		MAX_SPEED		= 12.0; % if PID wants to go faster, bound it to this
+		MIN_SPEED		= 5.0; % if PID wants to go slower, set to 0
 
-% Margin of acceptable error for PID control distance
-DISTANCE_ERROR	= 0.75; % cm
-ANGLE_ERROR		= 7.5; % degrees
+		% Margin of acceptable error for PID control distance
+		DISTANCE_ERROR	= 0.75; % cm
+		ANGLE_ERROR		= 7.5; % degrees
 
-% PID terms. Will definitely need tuning.
-KpS = -0.06;
-KiS = -0.003;
-KdS = 0.0001; %0.007;
+		% PID terms. Will definitely need tuning.
+		KpS = -0.06;
+		KiS = 0; %-0.003;
+		KdS = 0;
+		%KiS = -0.003;
+		%KdS = 0.0001; %0.007;
 
 	end
 	methods
-      function obj = odometry(val)
-         if nargin > 0
-            obj.nb = val;
-         end
-      end
+		function obj = odometry(val)
+			obj.nb = val;
+			obj.nb.initReflectance();
+        end
+
+		function val = reflectanceRead(m)
+			val = m.nb.reflectanceRead();
+		end
+
+		% autonomous color task
+        function [] = do_color_task(m)
+            % Read color under sensor
+			[r,g,b] = m.get_color();
+
+			% Figure out if it's red, turn accordingly
+			isRed = r > b;
+			fprintf("Red: %d\n", isRed);
+			
+			m.set_speeds(-8,-10);
+			pause(0.25);
+			fprintf("off the pad\n");
+			if(isRed)
+				m.turn_degrees(45);
+			else
+				m.turn_degrees(-45);
+			end
+			fprintf("turned\n");
+
+			[r,g,b] = m.get_color()
+
+			if(isRed)
+				while(r < 160)
+					[r,g,b] = m.get_color()
+					if(r > 160)
+						m.set_speeds(0,0);
+						break;
+					end
+					m.set_speeds(-8,-10);
+					pause(0.25);
+				end
+			else
+				while(b < 100)
+					[r,g,b] = m.get_color()
+					if(b > 100)
+						m.set_speeds(0,0);
+						break;
+					end
+					m.set_speeds(-8,-10);
+					pause(0.25);
+				end
+			end
+
+			input("Target reached?? Return?");
+			m.turn_degrees(179);
+			m.set_speeds(-8,-10);
+			pause(0.25);
+			while(1)
+				[r,g,b] = m.get_color()
+				if(r > 160 || b > 100)
+					m.set_speeds(0,0);
+					break;
+				end
+				m.set_speeds(-8,-10);
+				pause(0.25);
+			end
+			fprintf("done");
+        end
+
+		% Get RGB under color sensor
+		function [r,g,b] = get_color(m)
+            m.nb.initColor();
+			value = m.nb.colorRead();
+			r = value.red;
+			g = value.green;
+			b = value.blue;
+		end
+
 		% Get encoder counts
 		function [left, right] = get_encoders(m)
 			left = -1 * m.nb.encoderRead(1).counts; % left is counting backwards for some reason idk
@@ -57,13 +129,13 @@ KdS = 0.0001; %0.007;
 			if abs(left) > m.MAX_SPEED
 				left = m.MAX_SPEED * sign(left);
 			elseif abs(left) < m.MIN_SPEED
-				left = 0;
+				left = m.MIN_SPEED * sign(left);
 			end
 
 			if abs(right) > m.MAX_SPEED
 				right = m.MAX_SPEED * sign(right);
 			elseif abs(right) < m.MIN_SPEED
-				right = 0;
+				right = m.MIN_SPEED * sign(right);
 			end
 
 			m.nb.setMotor(1, left);
@@ -97,8 +169,8 @@ KdS = 0.0001; %0.007;
 				[left, right] = m.get_encoders();
 
 				% convert to distance
-				distTravelledLeft = distTravelledLeft + m.counts_to_distance(left)
-				distTravelledRight = distTravelledRight + m.counts_to_distance(right)
+				distTravelledLeft = distTravelledLeft + m.counts_to_distance(left);
+				distTravelledRight = distTravelledRight + m.counts_to_distance(right);
 
 				% LEFT control
 				errL = distTravelledLeft - distance;
@@ -126,8 +198,12 @@ KdS = 0.0001; %0.007;
 				end
 
 				% Also takes care of clamping
-                % currSpeedL, currSpeedR
+				% currSpeedL, currSpeedR
 				m.set_speeds(currSpeedL, currSpeedR);
+
+				if(currSpeedL < m.MIN_SPEED && currSpeedR < m.MIN_SPEED)
+					return;;
+				end
 
 				% wait for next sample
 				pause(1/m.SAMPLE_FREQ);
