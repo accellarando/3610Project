@@ -1,0 +1,34 @@
+%% Connect Nanobot
+clear; clc; close all;
+nb = nanobot('/dev/cu.usbmodem2101', 115200, 'serial');
+
+%% Initialize RGB Sensor
+
+%Initialize the RGB color sensor
+nb.initColor();
+
+%Take a single RGB color sensor reading
+values = nb.colorRead();
+
+%The sensor values are saved as fields in a structure:
+red = values.red;
+green = values.green;
+blue = values.blue;
+fprintf('red: %.2f, green: %.2f, blue: %.2f\n', red, green, blue);
+
+% Move off of color square
+nb.setMotor(1, 10);
+nb.setMotor(2, 10);
+
+pause(0.5);
+
+nb.setMotor(1, 10);
+nb.setMotor(2, 10);
+
+
+if(red > blue) % Turn 45
+
+else
+
+end
+
